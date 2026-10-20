@@ -198,3 +198,12 @@ test('developer charts use shared Tasks instead of defining their own', () => {
     YAML.stringify(rendered.filter(resource => resource.kind === 'Task')));
   assert.equal(hasInlineTaskSpec(rendered), false);
 });
+
+test('Component environment accepts a Resource connection reference and rejects ambiguous values', () => {
+  const values = buildValues();
+  values.runtime.env = [{name:'KAFKA_BOOTSTRAP_SERVERS',valueFrom:{configMapKeyRef:{name:'events-dev-connection',key:'KAFKA_BOOTSTRAP_SERVERS'}}}];
+  const deployment = resource(render('charts/component/container', values), 'Deployment');
+  assert.deepEqual(deployment.spec.template.spec.containers[0].env, values.runtime.env);
+  values.runtime.env[0].value = 'ambiguous';
+  assert.match(renderFailure('charts/component/container', values), /oneOf/);
+});

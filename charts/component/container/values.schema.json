@@ -62,10 +62,19 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["name", "value"],
+            "required": ["name"],
+            "oneOf": [{"required": ["value"]}, {"required": ["valueFrom"]}],
             "properties": {
               "name": {"type": "string", "minLength": 1},
-              "value": {"type": "string"}
+              "value": {"type": "string"},
+              "valueFrom": {
+                "type": "object",
+                "oneOf": [{"required": ["configMapKeyRef"]}, {"required": ["secretKeyRef"]}],
+                "properties": {
+                  "configMapKeyRef": {"type": "object", "required": ["name", "key"], "properties": {"name": {"type": "string", "minLength": 1}, "key": {"type": "string", "minLength": 1}}},
+                  "secretKeyRef": {"type": "object", "required": ["name", "key"], "properties": {"name": {"type": "string", "minLength": 1}, "key": {"type": "string", "minLength": 1}}}
+                }
+              }
             }
           }
         }
