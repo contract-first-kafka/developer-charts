@@ -36,6 +36,7 @@ spec:
           helm:
             valueFiles: ['$values/apis/{{ "{{ index .path.segments 1 }}" }}/values.yaml']
             valuesObject:
+              eventCatalogRefreshUrl: {{ .Values.eventCatalogRefreshUrl | default "" | quote }}
               systemName: {{ .Values.systemName }}
               groupId: {{ .Values.groupId }}
               apiName: '{{ "{{ index .path.segments 1 }}" }}'

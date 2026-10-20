@@ -135,4 +135,22 @@ spec:
             args:
               - $(workspaces.source.path)/asyncapi-tools/verify-microcks.cjs
               - $(workspaces.source.path)/source/specification.yaml
+{{- if .Values.eventCatalogRefreshUrl }}
+  finally:
+    - name: refresh-domain-catalog
+      when:
+        - {input: $(tasks.status), operator: in, values: [Succeeded, Completed]}
+      taskSpec:
+        steps:
+          - name: signal
+            image: registry.access.redhat.com/ubi9/nodejs-22:latest
+            env:
+              - {name: REFRESH_URL, value: {{ .Values.eventCatalogRefreshUrl | quote }}}
+            script: |
+              #!/usr/bin/env node
+              // Catalog delivery is independent of successful contract publication.
+              fetch(process.env.REFRESH_URL, {method:'POST',headers:{'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(15000)})
+                .then(r=>console.log('Domain refresh signal HTTP '+r.status))
+                .catch(e=>console.log('Domain refresh unavailable: '+e.message));
+{{- end }}
 {{- end }}
