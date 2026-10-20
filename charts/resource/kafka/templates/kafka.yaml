@@ -1,0 +1,57 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: {{ .Values.clusterName }}-nodes
+  labels:
+    strimzi.io/cluster: {{ .Values.clusterName }}
+    contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+    contract-first-idp.github.io/resource: {{ .Values.resourceName | quote }}
+spec:
+  replicas: {{ .Values.replicas }}
+  roles: [controller, broker]
+  storage:
+    type: persistent-claim
+    size: {{ .Values.storage.size }}
+    deleteClaim: {{ .Values.storage.deleteClaim }}
+{{- if .Values.storage.storageClass }}
+    class: {{ .Values.storage.storageClass }}
+{{- end }}
+  resources:
+{{ toYaml .Values.resources | indent 4 }}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: {{ .Values.clusterName }}
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+    contract-first-idp.github.io/resource: {{ .Values.resourceName | quote }}
+spec:
+  kafka:
+    version: {{ .Values.kafkaVersion | quote }}
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+        configuration:
+          networkPolicyPeers:
+            - podSelector: {}
+    config:
+      offsets.topic.replication.factor: {{ min 3 (.Values.replicas | int) }}
+      transaction.state.log.replication.factor: {{ min 3 (.Values.replicas | int) }}
+      transaction.state.log.min.isr: {{ ternary 2 1 (ge (.Values.replicas | int) 3) }}
+      default.replication.factor: {{ min 3 (.Values.replicas | int) }}
+      min.insync.replicas: {{ ternary 2 1 (ge (.Values.replicas | int) 3) }}
+  entityOperator:
+    topicOperator: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.clusterName }}-connection
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+    contract-first-idp.github.io/resource: {{ .Values.resourceName | quote }}
+data:
+  KAFKA_BOOTSTRAP_SERVERS: {{ printf "%s-kafka-bootstrap:9092" .Values.clusterName | quote }}

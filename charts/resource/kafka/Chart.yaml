@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kafka
+description: Red Hat Streams for Apache Kafka KRaft resource
+type: application
+version: 1.2.0
+appVersion: "1.2.0"

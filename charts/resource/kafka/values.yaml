@@ -1,0 +1,12 @@
+systemName: example
+resourceName: events
+clusterName: events-dev
+kafkaVersion: 4.2.0
+replicas: 1
+storage:
+  size: 5Gi
+  storageClass: ''
+  deleteClaim: false
+resources:
+  requests: {cpu: 250m, memory: 1Gi}
+  limits: {cpu: '1', memory: 2Gi}

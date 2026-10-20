@@ -24,6 +24,7 @@ spec:
               --param git-url={{ .Values.build.repository }}
               --param git-revision={{ .Values.build.revision }}
               --workspace name=source,volumeClaimTemplateFile=/workspace/source-pvc.yaml
+              --workspace name=registry-auth,secret={{ .Values.build.registryPushSecretName }}
               --workspace name=maven-settings,emptyDir=
               --use-param-defaults --showlog
               --exit-with-pipelinerun-error

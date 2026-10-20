@@ -137,6 +137,7 @@ test('container chart renders shared delivery capabilities and runtime contracts
   for (const copyTaskName of ['publish-latest', 'materialize-release']) {
     const copyTask = pipeline.spec.tasks.find(task => task.name === copyTaskName);
     assert.deepEqual(copyTask.params.map(param => param.name), [
+      'ARGS',
       'SOURCE_IMAGE_URL',
       'DESTINATION_IMAGE_URL',
       'SRC_TLS_VERIFY',

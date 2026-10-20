@@ -19,6 +19,7 @@ spec:
   workspaces:
     - {name: source}
     - {name: maven-settings}
+    - {name: registry-auth}
   tasks:
     - name: clone
       taskRef:
@@ -74,7 +75,9 @@ spec:
       params:
         - {name: IMAGE, value: $(params.image-repository):git-$(tasks.clone.results.COMMIT)}
         - {name: DOCKERFILE, value: {{ $recipe.dockerfilePath | quote }}}
-      workspaces: [{name: source, workspace: source, subPath: source}]
+      workspaces:
+        - {name: source, workspace: source, subPath: source}
+        - {name: dockerconfig, workspace: registry-auth}
     - name: publish-latest
       runAfter: [build-and-push]
       when:
@@ -85,7 +88,9 @@ spec:
           - {name: kind, value: task}
           - {name: name, value: skopeo-copy}
           - {name: namespace, value: openshift-pipelines}
+      workspaces: [{name: images_url, workspace: registry-auth}]
       params:
+        - {name: ARGS, value: "--authfile=/workspace/images_url/.dockerconfigjson"}
         - name: SOURCE_IMAGE_URL
           value: docker://$(params.image-repository):git-$(tasks.clone.results.COMMIT)
         - name: DESTINATION_IMAGE_URL
@@ -140,7 +145,9 @@ spec:
           - {name: kind, value: task}
           - {name: name, value: skopeo-copy}
           - {name: namespace, value: openshift-pipelines}
+      workspaces: [{name: images_url, workspace: registry-auth}]
       params:
+        - {name: ARGS, value: "--authfile=/workspace/images_url/.dockerconfigjson"}
         - name: SOURCE_IMAGE_URL
           value: docker://$(params.image-repository)@$(tasks.assert-release-version.results.sourceDigest)
         - name: DESTINATION_IMAGE_URL
