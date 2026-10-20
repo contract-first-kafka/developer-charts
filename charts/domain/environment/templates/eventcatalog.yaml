@@ -91,7 +91,7 @@ metadata:
   name: eventcatalog
   namespace: {{ $namespace }}
 spec:
-  workspaces: [{name: source}]
+  workspaces: [{name: source}, {name: registry-auth}]
   tasks:
     - name: clone
       taskRef:
@@ -157,7 +157,9 @@ spec:
       params:
         - {name: IMAGE, value: {{ $imageRepo }}:inputs-$(tasks.discover.results.fingerprint)}
         - {name: DOCKERFILE, value: Dockerfile}
-      workspaces: [{name: source, workspace: source, subPath: source/eventcatalog}]
+      workspaces:
+        - {name: source, workspace: source, subPath: source/eventcatalog}
+        - {name: dockerconfig, workspace: registry-auth}
     - name: publish-gitops-intent
       runAfter: [build-and-push]
       when: [{input: $(tasks.discover.results.changed), operator: in, values: ["true"]}]
@@ -195,6 +197,8 @@ spec:
         taskRunTemplate: {serviceAccountName: pipeline}
         timeouts: {pipeline: 1h0m0s}
         workspaces:
+          - name: registry-auth
+            secret: {secretName: {{ .Values.spec.platform.registry.quay.credentials.destinationPushSecretName }}}
           - name: source
             volumeClaimTemplate:
               spec:
