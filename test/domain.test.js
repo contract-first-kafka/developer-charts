@@ -188,6 +188,9 @@ test('Domain catalog is opt-in, shared, and deploys only immutable GitOps intent
   let resources = render('charts/domain/environment', values);
   const pipeline = resource(resources, 'Pipeline', 'eventcatalog');
   assert.equal(pipeline.metadata.namespace, 'retail-catalog');
+  assert.equal(resource(resources, 'ImageStream', 'eventcatalog').metadata.namespace, 'retail-catalog');
+  assert.deepEqual(pipeline.spec.tasks.find(t=>t.name==='build-and-push').workspaces.find(w=>w.name==='dockerconfig'), {name:'dockerconfig',workspace:'registry-auth'});
+  assert.equal(resource(resources,'TriggerTemplate','eventcatalog').spec.resourcetemplates[0].spec.workspaces.find(w=>w.name==='registry-auth').secret.secretName, values.spec.platform.registry.quay.credentials.destinationPushSecretName);
   assert.equal(resources.some(r=>r.kind==='Deployment'), false);
   assert.equal(pipeline.spec.tasks.find(t=>t.name==='generate-and-build').when[0].input, '$(tasks.discover.results.changed)');
   assert.equal(pipeline.spec.tasks.find(t=>t.name==='publish-gitops-intent').taskSpec.steps[0].args[0], '/tools/publish-intent.mjs');

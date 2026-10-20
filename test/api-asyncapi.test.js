@@ -12,3 +12,15 @@ test('AsyncAPI uses existing hooks, triggers and credentials while validating be
  assert.ok(resource(resources,'Job','events-api-initial-publish'));
  assert.ok(resource(resources,'EventListener','events-api'));
 });
+
+test('only successful AsyncAPI publication signals the Domain, without waiting for its build',()=>{
+ const values=chartValues('charts/api/openapi');values.specificationType='asyncapi';values.apiName='events';values.eventCatalogRefreshUrl='https://catalog-refresh.example';
+ const pipeline=resource(render('charts/api/openapi',values),'Pipeline','events-api');
+ const signal=pipeline.spec.finally[0];
+ assert.deepEqual(signal.when,[{input:'$(tasks.status)',operator:'in',values:['Succeeded','Completed']}]);
+ assert.equal(signal.taskSpec.steps[0].env[0].value,values.eventCatalogRefreshUrl);
+ assert.match(signal.taskSpec.steps[0].script,/AbortSignal.timeout/);
+ assert.match(signal.taskSpec.steps[0].script,/\.catch\(e=>console.log/);
+ values.specificationType='openapi';
+ assert.equal(resource(render('charts/api/openapi',values),'Pipeline','events-api').spec.finally,undefined);
+});
