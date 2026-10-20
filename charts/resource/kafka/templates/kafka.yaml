@@ -34,9 +34,8 @@ spec:
         port: 9092
         type: internal
         tls: false
-        configuration:
-          networkPolicyPeers:
-            - podSelector: {}
+        networkPolicyPeers:
+          - podSelector: {}
     config:
       offsets.topic.replication.factor: {{ min 3 (.Values.replicas | int) }}
       transaction.state.log.replication.factor: {{ min 3 (.Values.replicas | int) }}
