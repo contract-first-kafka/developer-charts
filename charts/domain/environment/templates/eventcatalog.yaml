@@ -210,6 +210,11 @@ spec:
   serviceAccountName: pipeline
   triggers:
     - name: refresh
+      interceptors:
+        - ref: {name: cel}
+          params:
+            - name: filter
+              value: "!has(body.zen) && (!has(body.ref) || body.ref == 'refs/heads/main')"
       template: {ref: eventcatalog}
 ---
 apiVersion: route.openshift.io/v1
