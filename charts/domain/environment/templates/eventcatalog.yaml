@@ -73,6 +73,9 @@ metadata:
   name: eventcatalog-launcher
   namespace: {{ $namespace }}
 rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, create, delete]
   - apiGroups: [tekton.dev]
     resources: [pipelineruns]
     verbs: [create, get, list, watch]
@@ -101,7 +104,21 @@ metadata:
 spec:
   workspaces: [{name: source}, {name: registry-auth}]
   tasks:
+    - name: acquire-build
+      taskSpec:
+        results: [{name: acquired}]
+        volumes: [{name: tools, configMap: {name: eventcatalog-tools}}]
+        steps:
+          - name: lease
+            image: registry.access.redhat.com/ubi9/nodejs-24:latest
+            env:
+              - {name: NODE_EXTRA_CA_CERTS, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+            volumeMounts: [{name: tools, mountPath: /tools}]
+            command: [node]
+            args: [/tools/build-lock.mjs, acquire, {{ $namespace }}, $(context.pipelineRun.name), $(context.pipelineRun.uid)]
     - name: clone
+      runAfter: [acquire-build]
+      when: [{input: $(tasks.acquire-build.results.acquired), operator: in, values: ["true"]}]
       taskRef:
         resolver: cluster
         params:
@@ -116,6 +133,7 @@ spec:
       workspaces: [{name: output, workspace: source}]
     - name: discover
       runAfter: [clone]
+      when: [{input: $(tasks.acquire-build.results.acquired), operator: in, values: ["true"]}]
       workspaces: [{name: source, workspace: source}]
       taskSpec:
         workspaces: [{name: source}]
@@ -189,6 +207,19 @@ spec:
               - {name: GITHUB_APP_PRIVATE_KEY, valueFrom: {secretKeyRef: {name: eventcatalog-gitops, key: private-key}}}
             command: [node]
             args: [/tools/publish-intent.mjs, {{ $repository | quote }}, $(params.image), $(params.fingerprint)]
+  finally:
+    - name: release-build
+      when: [{input: $(tasks.acquire-build.results.acquired), operator: in, values: ["true"]}]
+      taskSpec:
+        volumes: [{name: tools, configMap: {name: eventcatalog-tools}}]
+        steps:
+          - name: lease
+            image: registry.access.redhat.com/ubi9/nodejs-24:latest
+            env:
+              - {name: NODE_EXTRA_CA_CERTS, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+            volumeMounts: [{name: tools, mountPath: /tools}]
+            command: [node]
+            args: [/tools/build-lock.mjs, release, {{ $namespace }}, $(context.pipelineRun.name), $(context.pipelineRun.uid), $(tasks.status)]
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate

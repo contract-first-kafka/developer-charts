@@ -34,8 +34,12 @@ nor waits for catalog delivery. An initial GitOps hook starts the first build.
 Every signal rediscovers Git inputs. If effective source content matches the
 published input digest, generation, image publication, and intent updates are
 skipped. The image-intent commit is excluded from this fingerprint, preventing a
-webhook rebuild loop. Independent overlapping signals may run discovery in
-parallel; this demo does not implement a distributed build queue.
+webhook rebuild loop. A native Kubernetes Lease coalesces overlapping signals: only its holder builds.
+A successful build releases the lease and signals one final rediscovery to catch
+changes received during the build. Unchanged runs release without signaling again.
+Failed runs release without an automatic retry loop; signal refresh after fixing
+the source. A later run can reclaim a lease whose owning PipelineRun has finished
+or been deleted. No queue service or additional controller is introduced.
 
 EventCatalog 5.4.1 and generator-asyncapi 7.1.0 are pinned with the project lockfile.
 The native generator handles messages, channels (`parseChannels: true`), schemas,
