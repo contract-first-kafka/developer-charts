@@ -13,3 +13,10 @@ test('Kafka Resource uses KRaft, retained storage and namespace-local connection
   values.replicas = 2;
   expect(renderFailure(chart, values)).toContain('replicas');
 });
+
+test('System project admits only the supported Kafka resource kinds', () => {
+ const objects = render('charts/system/environment', chartValues('charts/system/environment'));
+ const allowed = resource(objects, 'AppProject').spec.namespaceResourceWhitelist;
+ expect(allowed).toContainEqual({group:'kafka.strimzi.io',kind:'Kafka'});
+ expect(allowed).toContainEqual({group:'kafka.strimzi.io',kind:'KafkaNodePool'});
+});

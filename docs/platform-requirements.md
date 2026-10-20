@@ -140,6 +140,10 @@ The PostgreSQL profile requires:
 - the `PostgresCluster` CRD;
 - any requested storage classes.
 
+The Kafka profile requires Red Hat Streams for Apache Kafka 3.2, the `kafka.strimzi.io/v1`
+`Kafka` and `KafkaNodePool` CRDs, and a persistent-volume storage class. Platform installation
+provides the operator; System Resource intent creates each environment broker.
+
 Do not enable a Resource profile until its CRDs and controllers are healthy on the target cluster.
 
 ## Source repository access
