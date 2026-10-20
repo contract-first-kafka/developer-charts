@@ -61,6 +61,7 @@ spec:
           path: charts/system/environment
           helm:
             valuesObject:
+              eventCatalogRefreshUrl: {{ if (dig "eventCatalog" "enabled" false $.Values.spec) }}{{ printf "https://el-eventcatalog-%s-catalog.%s" $.Values.metadata.name $.Values.spec.platform.cluster.routerDomain | quote }}{{ else }}""{{ end }}
               domainName: {{ $.Values.metadata.name | quote }}
               systemName: '{{ "{{ .systemName }}" }}'
               groupId: '{{ "{{ .groupId }}" }}'

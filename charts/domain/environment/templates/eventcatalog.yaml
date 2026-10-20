@@ -1,0 +1,289 @@
+{{- if (dig "eventCatalog" "enabled" false .Values.spec) }}
+{{- $domain := .Values.metadata.name }}
+{{- $namespace := printf "%s-catalog" $domain }}
+{{- $host := index .Values.metadata.annotations "contract-first-idp.github.io/scm-host" }}
+{{- $org := index .Values.metadata.annotations "contract-first-idp.github.io/domain-org" }}
+{{- $repo := index .Values.metadata.annotations "contract-first-idp.github.io/domain-repo" }}
+{{- $repository := include "contract-first-idp.tenantRepository" (dict "host" $host "org" $org "repository" $repo) }}
+{{- $imageRepo := printf "%s/%s_%s/eventcatalog" .Values.spec.platform.registry.quay.host .Values.spec.platform.registry.quay.clusterId $namespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $namespace }}
+  labels:
+    contract-first-idp.github.io/domain: {{ $domain }}
+    platform.contract-first.io/secrets: enabled
+  annotations: {argocd.argoproj.io/sync-wave: "-3"}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline
+  namespace: {{ $namespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "-2"}
+secrets:
+  - name: {{ .Values.spec.platform.registry.quay.credentials.destinationPushSecretName }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: eventcatalog-gitops
+  namespace: {{ $namespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "-2"}
+spec:
+  secretStoreRef: {kind: ClusterSecretStore, name: cf-idp-secrets}
+  target:
+    template:
+      engineVersion: v2
+      data:
+        app-id: '{{ `{{ .appId }}` }}'
+        private-key: '{{ `{{ .privateKey | b64dec }}` }}'
+  data:
+    - secretKey: appId
+      remoteRef: {key: platform-secrets, property: GITHUB_APP_ID}
+    - secretKey: privateKey
+      remoteRef: {key: platform-secrets, property: GITHUB_APP_PRIVATE_KEY_BASE64}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eventcatalog-listener
+  namespace: {{ $namespace }}
+subjects: [{kind: ServiceAccount, name: pipeline}]
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: tekton-triggers-eventlistener-roles}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $domain }}-catalog-listener
+subjects: [{kind: ServiceAccount, name: pipeline, namespace: {{ $namespace }}}]
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: tekton-triggers-eventlistener-clusterroles}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eventcatalog-launcher
+  namespace: {{ $namespace }}
+rules:
+  - apiGroups: [tekton.dev]
+    resources: [pipelineruns]
+    verbs: [create, get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eventcatalog-launcher
+  namespace: {{ $namespace }}
+subjects: [{kind: ServiceAccount, name: pipeline}]
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: eventcatalog-launcher}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eventcatalog-tools
+  namespace: {{ $namespace }}
+data:
+{{ (.Files.Glob "files/eventcatalog/*.mjs").AsConfig | indent 2 }}
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: eventcatalog
+  namespace: {{ $namespace }}
+spec:
+  workspaces: [{name: source}]
+  tasks:
+    - name: clone
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: git-clone}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - {name: URL, value: {{ $repository | quote }}}
+        - {name: REVISION, value: main}
+        - {name: SUBDIRECTORY, value: source}
+        - {name: DELETE_EXISTING, value: "true"}
+      workspaces: [{name: output, workspace: source}]
+    - name: discover
+      runAfter: [clone]
+      workspaces: [{name: source, workspace: source}]
+      taskSpec:
+        workspaces: [{name: source}]
+        results: [{name: changed}, {name: fingerprint}]
+        steps:
+          - name: discover
+            image: registry.access.redhat.com/ubi9/nodejs-24:latest
+            workingDir: $(workspaces.source.path)/source/eventcatalog
+            env: [{name: npm_config_cache, value: /tmp/npm-cache}]
+            script: |
+              #!/bin/sh
+              set -eu
+              npm ci --ignore-scripts --no-audit --no-fund
+              npm run discover
+              node -e 'const fs=require("fs"),d=JSON.parse(fs.readFileSync(".discovery.json"));fs.writeFileSync("$(results.changed.path)",String(d.changed));fs.writeFileSync("$(results.fingerprint.path)",d.inputDigest)'
+    - name: generate-and-build
+      runAfter: [discover]
+      when: [{input: $(tasks.discover.results.changed), operator: in, values: ["true"]}]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: nodejs}
+          - {name: namespace, value: tekton-tasks}
+      workspaces: [{name: source, workspace: source, subPath: source/eventcatalog}]
+      params:
+        - name: SCRIPT
+          value: |
+            set -eu
+            export CATALOG_URL={{ printf "https://eventcatalog-%s.%s" $domain .Values.spec.platform.cluster.routerDomain | quote }}
+            export NODE_OPTIONS=--max-old-space-size=4096
+            mkdir -p public/LICENSES
+            cp node_modules/@eventcatalog/core/LICENSE public/LICENSES/EventCatalog.txt
+            cp node_modules/@eventcatalog/core/NOTICE public/LICENSES/EventCatalog-NOTICE.txt
+            cp node_modules/@eventcatalog/generator-asyncapi/LICENSE public/LICENSES/AsyncAPI-generator.txt
+            npm run generate
+            npm run build
+    - name: build-and-push
+      runAfter: [generate-and-build]
+      when: [{input: $(tasks.discover.results.changed), operator: in, values: ["true"]}]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: buildah}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - {name: IMAGE, value: {{ $imageRepo }}:inputs-$(tasks.discover.results.fingerprint)}
+        - {name: DOCKERFILE, value: Dockerfile}
+      workspaces: [{name: source, workspace: source, subPath: source/eventcatalog}]
+    - name: publish-gitops-intent
+      runAfter: [build-and-push]
+      when: [{input: $(tasks.discover.results.changed), operator: in, values: ["true"]}]
+      params:
+        - {name: image, value: {{ $imageRepo }}@$(tasks.build-and-push.results.IMAGE_DIGEST)}
+        - {name: fingerprint, value: $(tasks.discover.results.fingerprint)}
+      workspaces: [{name: source, workspace: source}]
+      taskSpec:
+        params: [{name: image}, {name: fingerprint}]
+        workspaces: [{name: source}]
+        volumes: [{name: tools, configMap: {name: eventcatalog-tools}}]
+        steps:
+          - name: update-intent
+            image: registry.access.redhat.com/ubi9/nodejs-24:latest
+            volumeMounts: [{name: tools, mountPath: /tools}]
+            env:
+              - {name: PROJECT, value: $(workspaces.source.path)/source/eventcatalog}
+              - {name: GITHUB_APP_ID, valueFrom: {secretKeyRef: {name: eventcatalog-gitops, key: app-id}}}
+              - {name: GITHUB_APP_PRIVATE_KEY, valueFrom: {secretKeyRef: {name: eventcatalog-gitops, key: private-key}}}
+            command: [node]
+            args: [/tools/publish-intent.mjs, {{ $repository | quote }}, $(params.image), $(params.fingerprint)]
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: eventcatalog
+  namespace: {{ $namespace }}
+spec:
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata: {generateName: eventcatalog-}
+      spec:
+        pipelineRef: {name: eventcatalog}
+        taskRunTemplate: {serviceAccountName: pipeline}
+        timeouts: {pipeline: 1h0m0s}
+        workspaces:
+          - name: source
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources: {requests: {storage: 5Gi}}
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: eventcatalog
+  namespace: {{ $namespace }}
+spec:
+  serviceAccountName: pipeline
+  triggers:
+    - name: refresh
+      template: {ref: eventcatalog}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: el-eventcatalog
+  namespace: {{ $namespace }}
+spec:
+  to: {kind: Service, name: el-eventcatalog}
+  port: {targetPort: http-listener}
+  tls: {termination: edge, insecureEdgeTerminationPolicy: Redirect}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: eventcatalog-initial-build
+  namespace: {{ $namespace }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/hook-delete-policy: HookFailed
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: signal
+          image: registry.access.redhat.com/ubi9/nodejs-24:latest
+          command: [node, -e]
+          args:
+            - 'fetch("http://el-eventcatalog:8080", {method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))'
+{{- with .Values.spec.eventCatalog.image }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventcatalog
+  namespace: {{ $namespace }}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: eventcatalog}}
+  template:
+    metadata: {labels: {app: eventcatalog}}
+    spec:
+      imagePullSecrets: [{name: {{ $.Values.spec.platform.registry.quay.credentials.runtimePullSecretName }}}]
+      containers:
+        - name: eventcatalog
+          image: {{ . | quote }}
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /, port: http}, initialDelaySeconds: 5}
+          livenessProbe: {httpGet: {path: /, port: http}, initialDelaySeconds: 15}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventcatalog
+  namespace: {{ $namespace }}
+spec:
+  selector: {app: eventcatalog}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: eventcatalog
+  namespace: {{ $namespace }}
+spec:
+  host: {{ printf "eventcatalog-%s.%s" $domain $.Values.spec.platform.cluster.routerDomain }}
+  to: {kind: Service, name: eventcatalog}
+  port: {targetPort: http}
+  tls: {termination: edge, insecureEdgeTerminationPolicy: Redirect}
+{{- end }}
+{{- end }}

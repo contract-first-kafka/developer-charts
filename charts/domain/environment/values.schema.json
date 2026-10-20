@@ -22,6 +22,7 @@
       "type": "object",
       "required": ["platformTarget", "groupId", "environments", "platform"],
       "properties": {
+        "eventCatalog": {"type": "object", "properties": {"enabled": {"type": "boolean"}, "image": {"type": "string", "pattern": "@sha256:[a-f0-9]{64}$"}, "inputDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}, "additionalProperties": false},
         "owner": {"type": "string"},
         "type": {
           "type": "string",

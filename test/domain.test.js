@@ -180,3 +180,19 @@ test('Domain publisher identity configuration is platform-controlled and boolean
   values.spec.publisherIdentity = {enabled: false};
   assert.match(renderFailure('charts/domain/environment', values), /publisherIdentity.*not allowed/i);
 });
+
+test('Domain catalog is opt-in, shared, and deploys only immutable GitOps intent', () => {
+  const values = fixture('split-scm.yaml');
+  assert.equal(render('charts/domain/environment', values).some(r=>r.kind==='Pipeline'), false);
+  values.spec.eventCatalog = {enabled: true};
+  let resources = render('charts/domain/environment', values);
+  const pipeline = resource(resources, 'Pipeline', 'eventcatalog');
+  assert.equal(pipeline.metadata.namespace, 'retail-catalog');
+  assert.equal(resources.some(r=>r.kind==='Deployment'), false);
+  assert.equal(pipeline.spec.tasks.find(t=>t.name==='generate-and-build').when[0].input, '$(tasks.discover.results.changed)');
+  assert.equal(pipeline.spec.tasks.find(t=>t.name==='publish-gitops-intent').taskSpec.steps[0].args[0], '/tools/publish-intent.mjs');
+  values.spec.eventCatalog.image = 'quay.example/retail/catalog@sha256:'+'a'.repeat(64);
+  resources = render('charts/domain/environment', values);
+  assert.equal(resource(resources,'Deployment','eventcatalog').spec.template.spec.containers[0].image, values.spec.eventCatalog.image);
+  assert.equal(resources.filter(r=>r.kind==='ApplicationSet').length, values.spec.environments.order.length);
+});
