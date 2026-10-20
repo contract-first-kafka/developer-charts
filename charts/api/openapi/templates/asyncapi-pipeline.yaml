@@ -118,4 +118,21 @@ spec:
               --microcksURL="${MICROCKS_URL}/api/" \
               --keycloakClientId="${MICROCKS_CLIENT_ID}" \
               --keycloakClientSecret="${MICROCKS_CLIENT_SECRET}"
+    - name: verify-microcks
+      runAfter: [microcks-import]
+      workspaces: [{name: source, workspace: source}]
+      taskSpec:
+        workspaces: [{name: source}]
+        steps:
+          - name: verify-import
+            image: registry.access.redhat.com/ubi9/nodejs-22:latest
+            env:
+              - {name: AUTH_SERVER_URL, value: {{ .Values.schemaRegistry.authServerUrl | quote }}}
+              - {name: MICROCKS_URL, value: {{ .Values.microcks.url | quote }}}
+              - {name: MICROCKS_CLIENT_ID, valueFrom: {secretKeyRef: {name: microcks-client, key: client-id}}}
+              - {name: MICROCKS_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: microcks-client, key: client-secret}}}
+            command: [node]
+            args:
+              - $(workspaces.source.path)/asyncapi-tools/verify-microcks.cjs
+              - $(workspaces.source.path)/source/specification.yaml
 {{- end }}

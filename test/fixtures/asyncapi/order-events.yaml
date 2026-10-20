@@ -39,13 +39,19 @@ operations:
     channel: {$ref: '#/channels/orders'}
     messages:
       - {$ref: '#/channels/orders/messages/accepted'}
+  receiveCancellations:
+    action: receive
+    channel: {$ref: '#/channels/orders'}
+    messages:
       - {$ref: '#/channels/orders/messages/cancelled'}
   receiveAudit:
     action: receive
     channel: {$ref: '#/channels/audit'}
+    messages: [{$ref: '#/channels/audit/messages/accepted'}]
   receiveShipments:
     action: receive
     channel: {$ref: '#/channels/shipments'}
+    messages: [{$ref: '#/channels/shipments/messages/dispatched'}]
 components:
   schemas:
     CloudEventHeaders:
@@ -89,6 +95,7 @@ components:
   messages:
     OrderAccepted:
       name: OrderAccepted
+      contentType: application/avro
       headers: {$ref: '#/components/schemas/CloudEventHeaders'}
       payload: {$ref: '#/components/schemas/OrderAcceptedPayload'}
       bindings:
@@ -99,6 +106,7 @@ components:
           payload: {orderId: order-001, total: 49.95}
     OrderCancelled:
       name: OrderCancelled
+      contentType: application/avro
       headers: {$ref: '#/components/schemas/CloudEventHeaders'}
       payload: {$ref: '#/components/schemas/OrderCancelledPayload'}
       bindings:

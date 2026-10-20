@@ -26,3 +26,13 @@ for(const [name,change,pattern] of [
  ['invalid message example',d=>d.components.messages.OrderAccepted.examples[0].payload.total='bad',/Invalid payload example/],
  ['unsupported schema format',d=>d.components.schemas.ShipmentPayload.schemaFormat='application/xml',/schema|Unsupported/i]
 ]) test(name,async()=>{const d=YAML.parse(original);change(d);await assert.rejects(extract(YAML.stringify(d),'orders'),pattern)});
+const {verify}=require('../charts/api/openapi/files/asyncapi/verify-microcks.cjs');
+test('Microcks completeness gate rejects silent example loss and accepts complete import',()=>{
+ const doc={operations:{orders:{action:'receive',channel:{address:'orders'},messages:[{examples:[{name:'accepted',payload:{kind:'accepted'},headers:{ce_specversion:'1.0'}}]},{examples:[{name:'cancelled',payload:{kind:'cancelled'}}]}]}}};
+ const view={service:{operations:[{name:'RECEIVE orders',resourcePaths:['orders']}]},messagesMap:{'RECEIVE orders':[{eventMessage:{content:'{"kind":"cancelled"}'}}]}};
+ assert.throws(()=>verify(doc,view),/Microcks omitted example accepted/);
+ view.messagesMap['RECEIVE orders'].push({eventMessage:{content:'{"kind":"accepted"}',headers:[{name:'ce_specversion',values:['1.0']}]}});
+ assert.equal(verify(doc,view),2);
+ view.messagesMap['RECEIVE orders'][1].eventMessage.headers=[];
+ assert.throws(()=>verify(doc,view),/omitted header/);
+});

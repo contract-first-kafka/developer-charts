@@ -63,3 +63,12 @@ CLI integration with TLS verification. Import does not provision Kafka or enable
 the optional Microcks async minion. Availability of Kafka/WS mocking depends on
 those installed capabilities. Pipeline success alone is not proof of Kafka
 serializer interoperability.
+
+Installed Microcks 1.14.0 accepts AsyncAPI 3.1 but its importer retains only the
+last message's examples in a multi-message operation, and ignores examples when
+`operation.messages` is omitted. Use one explicit message per operation when full
+example import is needed; several operations may still share the same Kafka topic.
+A post-import gate verifies all operations, channels, supplied payload examples
+and headers, and fails if Microcks silently drops any. The full source contract is
+always imported unchanged. This is a Microcks capability limit, not a restriction
+on registry schema extraction.
