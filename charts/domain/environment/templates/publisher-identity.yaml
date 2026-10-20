@@ -124,7 +124,16 @@ spec:
   refreshPolicy: Periodic
   refreshInterval: 1h
   secretStoreRef: {kind: ClusterSecretStore, name: {{ $domain }}-keycloak-publishers}
-  target: {name: {{ $client }}, creationPolicy: Owner, deletionPolicy: Delete}
+  target:
+    name: {{ $client }}
+    creationPolicy: Owner
+    deletionPolicy: Delete
+    template:
+      engineVersion: v2
+      mergePolicy: Merge
+      metadata:
+        labels:
+          operator.keycloak.org/kind: KeycloakOIDCClient
   dataFrom: [{extract: {key: {{ $client }}}}]
 ---
 apiVersion: k8s.keycloak.org/v2alpha1

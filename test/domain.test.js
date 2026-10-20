@@ -25,6 +25,15 @@ test('one Domain render creates discovery for every ordered environment', () => 
     .map(item => item.metadata.name).sort(), ['retail-apicurio', 'retail-microcks']);
   assert.deepEqual(resources.filter(item => item.kind === 'KeycloakOIDCClient')
     .map(item => item.metadata.name).sort(), ['retail-apicurio', 'retail-microcks']);
+  for (const client of resources.filter(item => item.kind === 'KeycloakOIDCClient')) {
+    const projection = resources.find(item => item.kind === 'ExternalSecret' &&
+      item.metadata.namespace === client.metadata.namespace &&
+      item.metadata.name === client.spec.client.auth.secretRef.name);
+    assert.equal(projection.spec.target.template.metadata.labels['operator.keycloak.org/kind'],
+      'KeycloakOIDCClient');
+    assert.equal(projection.spec.target.template.mergePolicy, 'Merge');
+    assert.deepEqual(projection.spec.dataFrom, [{extract: {key: client.metadata.name}}]);
+  }
   const reader = resource(resources, 'Role', 'retail-publisher-reader');
   assert.deepEqual(reader.rules, [{
     apiGroups: [''], resources: ['secrets'],
