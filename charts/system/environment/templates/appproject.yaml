@@ -31,6 +31,8 @@ spec:
     - {group: batch, kind: Job}
     - {group: image.openshift.io, kind: ImageStream}
     - {group: postgres-operator.crunchydata.com, kind: PostgresCluster}
+    - {group: kafka.strimzi.io, kind: Kafka}
+    - {group: kafka.strimzi.io, kind: KafkaNodePool}
     - {group: route.openshift.io, kind: Route}
     - {group: tekton.dev, kind: Pipeline}
     - {group: triggers.tekton.dev, kind: EventListener}

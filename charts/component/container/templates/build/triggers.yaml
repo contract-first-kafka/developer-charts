@@ -59,6 +59,7 @@ spec:
               spec:
                 accessModes: [ReadWriteOnce]
                 resources: {requests: {storage: 2Gi}}
+          - {name: registry-auth, secret: {secretName: {{ .Values.build.registryPushSecretName }}}}
           - {name: maven-settings, emptyDir: {}}
 ---
 apiVersion: triggers.tekton.dev/v1beta1

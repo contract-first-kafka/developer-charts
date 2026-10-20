@@ -137,6 +137,7 @@ test('container chart renders shared delivery capabilities and runtime contracts
   for (const copyTaskName of ['publish-latest', 'materialize-release']) {
     const copyTask = pipeline.spec.tasks.find(task => task.name === copyTaskName);
     assert.deepEqual(copyTask.params.map(param => param.name), [
+      'ARGS',
       'SOURCE_IMAGE_URL',
       'DESTINATION_IMAGE_URL',
       'SRC_TLS_VERIFY',
@@ -196,4 +197,13 @@ test('developer charts use shared Tasks instead of defining their own', () => {
   assert.equal(rendered.some(resource => resource.kind === 'Task'), false,
     YAML.stringify(rendered.filter(resource => resource.kind === 'Task')));
   assert.equal(hasInlineTaskSpec(rendered), false);
+});
+
+test('Component environment accepts a Resource connection reference and rejects ambiguous values', () => {
+  const values = buildValues();
+  values.runtime.env = [{name:'KAFKA_BOOTSTRAP_SERVERS',valueFrom:{configMapKeyRef:{name:'events-dev-connection',key:'KAFKA_BOOTSTRAP_SERVERS'}}}];
+  const deployment = resource(render('charts/component/container', values), 'Deployment');
+  assert.deepEqual(deployment.spec.template.spec.containers[0].env, values.runtime.env);
+  values.runtime.env[0].value = 'ambiguous';
+  assert.match(renderFailure('charts/component/container', values), /oneOf/);
 });
