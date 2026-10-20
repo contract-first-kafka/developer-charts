@@ -1,0 +1,119 @@
+asyncapi: 3.1.0
+info:
+  title: Order fulfillment events
+  version: 1.0.0
+  description: Order lifecycle and shipment events with CloudEvents binary headers.
+  contact: {name: Demo domain maintainers}
+  license: {name: Apache-2.0}
+defaultContentType: application/json
+servers:
+  kafka:
+    host: kafka.example.invalid:9092
+    protocol: kafka
+    description: Client deployment supplies the Kafka broker; this contract does not provision it.
+    bindings:
+      kafka:
+        schemaRegistryUrl: https://apicurio.apps.cluster-ggvsm.dyn.redhatworkshops.io/apis/registry/v3
+        schemaRegistryVendor: apicurio
+        bindingVersion: 0.5.0
+channels:
+  orders:
+    address: demo.orders
+    servers: [{$ref: '#/servers/kafka'}]
+    messages:
+      accepted: {$ref: '#/components/messages/OrderAccepted'}
+      cancelled: {$ref: '#/components/messages/OrderCancelled'}
+  audit:
+    address: demo.orders.audit
+    servers: [{$ref: '#/servers/kafka'}]
+    messages:
+      accepted: {$ref: '#/components/messages/OrderAccepted'}
+  shipments:
+    address: demo.shipments
+    servers: [{$ref: '#/servers/kafka'}]
+    messages:
+      dispatched: {$ref: '#/components/messages/ShipmentDispatched'}
+operations:
+  receiveOrders:
+    action: receive
+    channel: {$ref: '#/channels/orders'}
+    messages:
+      - {$ref: '#/channels/orders/messages/accepted'}
+      - {$ref: '#/channels/orders/messages/cancelled'}
+  receiveAudit:
+    action: receive
+    channel: {$ref: '#/channels/audit'}
+  receiveShipments:
+    action: receive
+    channel: {$ref: '#/channels/shipments'}
+components:
+  schemas:
+    CloudEventHeaders:
+      type: object
+      required: [ce_specversion, ce_id, ce_source, ce_type]
+      properties:
+        ce_specversion: {type: string, const: '1.0'}
+        ce_id: {type: string}
+        ce_source: {type: string}
+        ce_type: {type: string}
+    OrderAcceptedPayload:
+      schemaFormat: application/vnd.apache.avro;version=1.9.0
+      schema:
+        type: record
+        name: OrderAccepted
+        namespace: io.github.contractfirstkafka.demo.orderfulfillment
+        fields:
+          - {name: orderId, type: string}
+          - {name: total, type: double}
+    OrderCancelledPayload:
+      schemaFormat: application/vnd.apache.avro;version=1.9.0
+      schema:
+        type: record
+        name: OrderCancelled
+        namespace: io.github.contractfirstkafka.demo.orderfulfillment
+        fields:
+          - {name: orderId, type: string}
+          - {name: reason, type: string}
+    ShipmentPayload:
+      schemaFormat: application/schema+json;version=draft-07
+      schema:
+        $schema: http://json-schema.org/draft-07/schema#
+        title: ShipmentDispatched
+        type: object
+        required: [orderId, trackingId]
+        properties:
+          orderId: {$ref: '#/components/schemas/Identifier'}
+          trackingId: {type: string, minLength: 1}
+        additionalProperties: false
+    Identifier: {type: string, minLength: 1}
+  messages:
+    OrderAccepted:
+      name: OrderAccepted
+      headers: {$ref: '#/components/schemas/CloudEventHeaders'}
+      payload: {$ref: '#/components/schemas/OrderAcceptedPayload'}
+      bindings:
+        kafka: {schemaIdLocation: header, bindingVersion: 0.5.0}
+      examples:
+        - name: accepted-order
+          headers: {ce_specversion: '1.0', ce_id: event-001, ce_source: /orders, ce_type: demo.order.accepted}
+          payload: {orderId: order-001, total: 49.95}
+    OrderCancelled:
+      name: OrderCancelled
+      headers: {$ref: '#/components/schemas/CloudEventHeaders'}
+      payload: {$ref: '#/components/schemas/OrderCancelledPayload'}
+      bindings:
+        kafka: {schemaIdLocation: header, bindingVersion: 0.5.0}
+      examples:
+        - name: cancelled-order
+          headers: {ce_specversion: '1.0', ce_id: event-002, ce_source: /orders, ce_type: demo.order.cancelled}
+          payload: {orderId: order-002, reason: customer-request}
+    ShipmentDispatched:
+      name: ShipmentDispatched
+      headers: {$ref: '#/components/schemas/CloudEventHeaders'}
+      payload: {$ref: '#/components/schemas/ShipmentPayload'}
+      bindings:
+        kafka: {schemaIdLocation: header, bindingVersion: 0.5.0}
+      examples:
+        - name: dispatched-shipment
+          headers: {ce_specversion: '1.0', ce_id: event-003, ce_source: /shipments, ce_type: demo.shipment.dispatched}
+          payload: {orderId: order-001, trackingId: tracking-001}

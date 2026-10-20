@@ -1,3 +1,4 @@
+{{- if eq .Values.specificationType "openapi" }}
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
@@ -104,3 +105,4 @@ spec:
             - -Dregistry.ifExists=CREATE_VERSION
             - -B
         - {name: MAVEN_IMAGE, value: "registry.access.redhat.com/ubi9/openjdk-21:1.24"}
+{{- end }}

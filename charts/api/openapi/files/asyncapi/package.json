@@ -1,0 +1,13 @@
+{
+  "name": "cf-idp-asyncapi-pipeline",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "@asyncapi/avro-schema-parser": "3.1.0",
+    "@asyncapi/parser": "3.6.6",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "avsc": "5.7.9",
+    "yaml": "2.8.3"
+  }
+}

@@ -3,6 +3,8 @@ SHELL := /usr/bin/env bash
 
 test: test-install
 	npm test --prefix test
+	npm ci --prefix charts/api/openapi/files/asyncapi --ignore-scripts --no-audit --no-fund
+	node --test test/asyncapi-validation.cjs
 
 release-check: test
 	npm run --prefix test test:release

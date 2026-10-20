@@ -1,3 +1,4 @@
+specificationType: openapi
 systemName: example
 groupId: io.github.cfidp.example
 apiName: example-api

@@ -1,0 +1,121 @@
+{{- if eq .Values.specificationType "asyncapi" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.apiName }}-asyncapi-tools
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+data:
+{{ (.Files.Glob "files/asyncapi/*.cjs").AsConfig | indent 2 }}
+{{ (.Files.Glob "files/asyncapi/*.json").AsConfig | indent 2 }}
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: {{ .Values.apiName }}-api
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  params:
+    - {name: git-url, type: string, default: {{ .Values.repository | quote }}}
+    - {name: git-revision, type: string, default: {{ .Values.revision | quote }}}
+    - {name: release-version, type: string, default: ""}
+  workspaces: [{name: source}]
+  tasks:
+    - name: clone
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: git-clone}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - {name: URL, value: $(params.git-url)}
+        - {name: REVISION, value: $(params.git-revision)}
+        - {name: DELETE_EXISTING, value: "true"}
+        - {name: SUBDIRECTORY, value: source}
+      workspaces: [{name: output, workspace: source}]
+    - name: validate-extract
+      runAfter: [clone]
+      workspaces: [{name: source, workspace: source}]
+      taskSpec:
+        workspaces: [{name: source}]
+        volumes:
+          - name: tools
+            configMap: {name: {{ .Values.apiName }}-asyncapi-tools}
+        steps:
+          - name: validate-extract
+            image: registry.access.redhat.com/ubi9/nodejs-22:latest
+            env: [{name: npm_config_cache, value: /tmp/npm-cache}]
+            volumeMounts: [{name: tools, mountPath: /tools}]
+            script: |
+              #!/bin/sh
+              set -eu
+              mkdir -p "$(workspaces.source.path)/asyncapi-tools"
+              cp /tools/* "$(workspaces.source.path)/asyncapi-tools/"
+              cd "$(workspaces.source.path)/asyncapi-tools"
+              npm ci --ignore-scripts --no-audit --no-fund
+              node contract.cjs "$(workspaces.source.path)/source/specification.yaml" "$(workspaces.source.path)/extracted" {{ .Values.apiName | quote }}
+    - name: publish-git-version
+      runAfter: [validate-extract]
+      params:
+        - {name: version, value: $(tasks.clone.results.COMMIT)}
+      workspaces: [{name: source, workspace: source}]
+      taskSpec:
+        params: [{name: version, type: string}]
+        workspaces: [{name: source}]
+        steps:
+          - name: publish
+            image: registry.access.redhat.com/ubi9/nodejs-22:latest
+            env:
+              - {name: REGISTRY_URL, value: {{ .Values.schemaRegistry.apiUrl | quote }}}
+            command: [node]
+            args:
+              - $(workspaces.source.path)/asyncapi-tools/publish.cjs
+              - $(workspaces.source.path)/source/specification.yaml
+              - $(workspaces.source.path)/extracted
+              - {{ .Values.apiName | quote }}
+              - {{ .Values.groupId | quote }}
+              - $(params.version)
+              - FIND_OR_CREATE_VERSION
+    - name: publish-release-version
+      runAfter: [publish-git-version]
+      when:
+        - input: $(params.release-version)
+          operator: notin
+          values: [""]
+      params:
+        - {name: version, value: $(params.release-version)}
+      workspaces: [{name: source, workspace: source}]
+      taskSpec:
+        params: [{name: version, type: string}]
+        workspaces: [{name: source}]
+        steps:
+          - name: publish
+            image: registry.access.redhat.com/ubi9/nodejs-22:latest
+            env:
+              - {name: REGISTRY_URL, value: {{ .Values.schemaRegistry.apiUrl | quote }}}
+            command: [node]
+            args:
+              - $(workspaces.source.path)/asyncapi-tools/publish.cjs
+              - $(workspaces.source.path)/source/specification.yaml
+              - $(workspaces.source.path)/extracted
+              - {{ .Values.apiName | quote }}
+              - {{ .Values.groupId | quote }}
+              - $(params.version)
+              - CREATE_VERSION
+    - name: microcks-import
+      runAfter: [validate-extract]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: microcks-cli}
+          - {name: namespace, value: tekton-tasks}
+      workspaces: [{name: source, workspace: source, subPath: source}]
+      params:
+        - name: SCRIPT
+          value: |
+            microcks import "specification.yaml:true" \
+              --microcksURL="${MICROCKS_URL}/api/" \
+              --keycloakClientId="${MICROCKS_CLIENT_ID}" \
+              --keycloakClientSecret="${MICROCKS_CLIENT_SECRET}"
+{{- end }}

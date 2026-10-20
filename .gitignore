@@ -2,3 +2,5 @@
 /test/node_modules/
 /test/coverage/
 /test/.cache/
+
+/charts/api/openapi/files/asyncapi/node_modules/
