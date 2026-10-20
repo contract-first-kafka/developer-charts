@@ -210,7 +210,9 @@ spec:
   finally:
     - name: release-build
       when: [{input: $(tasks.acquire-build.results.acquired), operator: in, values: ["true"]}]
+      params: [{name: status, value: $(tasks.status)}]
       taskSpec:
+        params: [{name: status, type: string}]
         volumes: [{name: tools, configMap: {name: eventcatalog-tools}}]
         steps:
           - name: lease
@@ -219,7 +221,7 @@ spec:
               - {name: NODE_EXTRA_CA_CERTS, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
             volumeMounts: [{name: tools, mountPath: /tools}]
             command: [node]
-            args: [/tools/build-lock.mjs, release, {{ $namespace }}, $(context.pipelineRun.name), $(context.pipelineRun.uid), $(tasks.status)]
+            args: [/tools/build-lock.mjs, release, {{ $namespace }}, $(context.pipelineRun.name), $(context.pipelineRun.uid), $(params.status)]
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
