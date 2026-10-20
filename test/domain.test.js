@@ -197,5 +197,9 @@ test('Domain catalog is opt-in, shared, and deploys only immutable GitOps intent
   values.spec.eventCatalog.image = 'quay.example/retail/catalog@sha256:'+'a'.repeat(64);
   resources = render('charts/domain/environment', values);
   assert.equal(resource(resources,'Deployment','eventcatalog').spec.template.spec.containers[0].image, values.spec.eventCatalog.image);
+  const container = resource(resources,'Deployment','eventcatalog').spec.template.spec.containers[0];
+  assert.equal(container.startupProbe.httpGet.path, '/');
+  assert.equal(container.startupProbe.failureThreshold * container.startupProbe.periodSeconds, 180);
+  assert.equal(container.resources.limits.memory, '1Gi');
   assert.equal(resources.filter(r=>r.kind==='ApplicationSet').length, values.spec.environments.order.length);
 });
