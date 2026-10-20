@@ -15,7 +15,7 @@ The current golden paths publish public Git repositories; discovery uses HTTPS
 Git access and does not inject a GitHub credential into project build scripts.
 
 The shared pipeline runs discovery, the official AsyncAPI generator and the
-EventCatalog static build, then uses the platform's shared buildah Task to push
+EventCatalog server build, then uses the platform's shared buildah Task to push
 an input-hash-tagged image to the namespace's Quay organization. Deployment uses
 its immutable digest. A final platform-owned step creates and merges a PR that
 changes only `spec.eventCatalog.image` and `inputDigest` in the Domain entity.
@@ -64,3 +64,15 @@ does not edit authored pages. Additional native documentation pages are optional
 Core BSL 1.1 and generator MIT notices are copied to `/LICENSES/` in the static
 image. This synthetic non-production reference architecture is permitted;
 enterprise production use may require a commercial license.
+
+## Server runtime
+
+The Domain scaffold enables EventCatalog 5.4.1 native MCP at `/docs/mcp` using
+Streamable HTTP and serves the UI from the same Node.js container on port 8080.
+The chart reserves 256Mi and allows 1Gi, with a 180-second startup probe budget
+and five-second HTTP probe timeouts. No additional service or persistent volume
+is introduced for the serving application. Build workspaces remain ephemeral.
+
+Verify with an MCP client initialization and actual `tools/call` requests; probe
+health and HTTP 200 alone do not prove contract retrieval. Check the scaffold
+README for packaging, client configuration, licensing, and production security.
