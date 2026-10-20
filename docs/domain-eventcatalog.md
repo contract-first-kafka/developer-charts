@@ -23,7 +23,9 @@ The existing platform GitHub App must be installed in the Domain organization
 with contents and pull-request write permissions. Its credentials are projected
 only into the intent step; the minted token is limited to the Domain repository.
 Argo CD reconciles the resulting image intent. No pipeline deployment patch is
-used. Existing Quay Bridge push/pull credentials are reused.
+used. An ImageStream provisions the Quay repository through Quay Bridge, following
+the existing Component chart convention. Existing Quay Bridge push/pull
+credentials are reused through buildah's explicit dockerconfig workspace.
 
 Domain and System push webhooks signal the Domain's Tekton EventListener. GitHub
 ping and non-main pushes are ignored. Successful AsyncAPI publication sends the
