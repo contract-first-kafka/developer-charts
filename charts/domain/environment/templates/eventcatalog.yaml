@@ -187,6 +187,7 @@ spec:
         - {name: source, workspace: source, subPath: source/eventcatalog}
         - {name: dockerconfig, workspace: registry-auth}
     - name: publish-gitops-intent
+      retries: 2
       runAfter: [build-and-push]
       when: [{input: $(tasks.discover.results.changed), operator: in, values: ["true"]}]
       params:
