@@ -8,13 +8,13 @@ The Domain golden path supplies the project in `eventcatalog/` automatically.
 
 Discovery follows the Domain's designated build-environment System activation
 files, checks each System's catalog membership, then follows `apis/*/values.yaml`
-to the API repository and its catalog `spec.definition.$text`. Only AsyncAPI
-entities become native generator inputs. Git revisions are resolved to SHAs and
+to the API repository and its catalog `spec.definition.$text`. AsyncAPI entities supply independent contracts; Component registrations supply real
+Services and their exact message selections from event-contracts.json. Git revisions are resolved to SHAs and
 published in `/build-inputs.json`. There is no separate contract inventory.
 The current golden paths publish public Git repositories; discovery uses HTTPS
 Git access and does not inject a GitHub credential into project build scripts.
 
-The shared pipeline runs discovery, the official AsyncAPI generator and the
+The shared pipeline runs discovery, the Domain project’s CF-IDP build-time generator and the
 EventCatalog server build, then uses the platform's shared buildah Task to push
 an input-hash-tagged image to the namespace's Quay organization. Deployment uses
 its immutable digest. A final platform-owned step creates and merges a PR that
@@ -27,7 +27,7 @@ used. An ImageStream provisions the Quay repository through Quay Bridge, followi
 the existing Component chart convention. Existing Quay Bridge push/pull
 credentials are reused through buildah's explicit dockerconfig workspace.
 
-Domain and System push webhooks signal the Domain's Tekton EventListener. GitHub
+Domain, System and Component push webhooks signal the Domain's Tekton EventListener. GitHub
 ping and non-main pushes are ignored. Successful AsyncAPI publication sends the
 same refresh signal as a best-effort final step; it neither generates resources
 nor waits for catalog delivery. An initial GitOps hook starts the first build.
@@ -41,27 +41,29 @@ Failed runs release without an automatic retry loop; signal refresh after fixing
 the source. A later run can reclaim a lease whose owning PipelineRun has finished
 or been deleted. No queue service or additional controller is introduced.
 
-EventCatalog 5.4.1 and generator-asyncapi 7.1.0 are pinned with the project lockfile.
-The native generator handles messages, channels (`parseChannels: true`), schemas,
-examples, specifications, and contract versions. Message IDs are prefixed with
-the contract Service ID to keep independent contracts distinct. No AsyncAPI
-parser, EventCatalog SDK integration, or custom resource generator is added.
+EventCatalog core 5.4.1, AsyncAPI parser 3.6.0, Avro schema parser 3.0.24 and
+EventCatalog SDK 2.31.2 are pinned in the Domain project lockfile. The build-time
+generator creates native Domains, Systems, real Component Services, independent
+Events and Kafka Channels. It never creates a Service for an API contract, and
+never infers Component roles from AsyncAPI operation direction. Contract-only
+Systems retain discoverable events, payload schemas and documentation.
 
-Generator 7.1.0 has no native System configuration. It creates contract Services
-under the Domain; Service names and summaries identify the source System and
-owner. These are explicitly independent contracts, not deployed Components.
-Native sends/receives reflect contract operations and do not prove real runtime
-producer/consumer relationships. Typed System nodes and implementation ownership
-are not synthesized. An empty Domain serves authored documentation without
-invented contract resources.
+Component catalog metadata and event-contracts.json are fingerprinted; ordinary
+application source edits do not force an image build. Pinned versions resolve to
+exact Git commits or release tags, and selected revisions coexist with current
+contracts. Missing versions or incompatible selections fail before generation.
+Removed Component registrations remove only their derived Services and relations.
+Existing Domain projects must receive the updated scripts and dependency lockfile
+in place: template changes cannot update previously copied project files. Their
+registered Component repositories also need the existing Domain push webhook.
 
 Author architecture context in `eventcatalog/docs/` using native EventCatalog
 Markdown/MDX frontmatter (`title` and `summary`). The overview is also included in
-the generated Domain page through the generator's standard Markdown callback.
+the generated Domain page during native Domain generation.
 Generated resources and fetched inputs are ignored build outputs. Regeneration
 does not edit authored pages. Additional native documentation pages are optional.
 
-Core BSL 1.1 and generator MIT notices are copied to `/LICENSES/` in the static
+Core BSL 1.1 and build dependency notices are copied to `/LICENSES/` in the static
 image. This synthetic non-production reference architecture is permitted;
 enterprise production use may require a commercial license.
 

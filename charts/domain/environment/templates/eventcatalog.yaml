@@ -165,10 +165,7 @@ spec:
             set -eu
             export CATALOG_URL={{ printf "https://eventcatalog-%s.%s" $domain .Values.spec.platform.cluster.routerDomain | quote }}
             export NODE_OPTIONS=--max-old-space-size=4096
-            mkdir -p public/LICENSES
-            cp node_modules/@eventcatalog/core/LICENSE public/LICENSES/EventCatalog.txt
-            cp node_modules/@eventcatalog/core/NOTICE public/LICENSES/EventCatalog-NOTICE.txt
-            cp node_modules/@eventcatalog/generator-asyncapi/LICENSE public/LICENSES/AsyncAPI-generator.txt
+            # The Domain project packages notices with its own pinned dependencies.
             npm run generate
             npm run build
     - name: build-and-push
